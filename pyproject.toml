@@ -1,0 +1,22 @@
+[project]
+name = "pygeoapi-formatter-jsonfg"
+version = "0.1.0"
+description = "JSON-FG (OGC Features and Geometries JSON) output formatter for pygeoapi"
+readme = "README.md"
+authors = [{ name = "Arkitektum AS" }]
+requires-python = ">=3.12"
+dependencies = [
+    "pygeoapi>=0.24.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[build-system]
+requires = ["setuptools>=80.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
