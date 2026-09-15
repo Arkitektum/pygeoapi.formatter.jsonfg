@@ -29,7 +29,7 @@ def test_defaults():
 
     assert formatter.f == "jsonfg"
     assert formatter.name == "jsonfg"
-    assert formatter.mimetype == "application/vnd.ogc.fg+json"
+    assert formatter.mimetype == "application/geo+json"
     assert formatter.extension == "jsonfg"
     assert formatter.attachment is False
     assert formatter.feature_type is None

@@ -37,7 +37,7 @@ class JsonFgFormatter(BaseFormatter):
         formatters:
           - name: pygeoapi_formatter_jsonfg.JsonFgFormatter
             f: jsonfg
-            mimetype: application/vnd.ogc.fg+json
+            mimetype: application/geo+json
             feature_type: Bygning
             attachment: false
             geometry_null: true

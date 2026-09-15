@@ -99,7 +99,7 @@ resources:
     formatters:
       - name: pygeoapi_formatter_jsonfg.JsonFgFormatter
         f: jsonfg
-        mimetype: application/vnd.ogc.fg+json
+        mimetype: application/geo+json
         feature_type: Building
         attachment: false
         geometry_null: true
@@ -113,7 +113,7 @@ resources:
 | --- | --- | --- |
 | `name` | — | Required by pygeoapi: the dotted path to the plugin class. |
 | `f` | `jsonfg` | The value of the `f=` query parameter that selects this formatter. |
-| `mimetype` | `application/vnd.ogc.fg+json` | The response `Content-Type`. |
+| `mimetype` | `application/geo+json` | The response `Content-Type`. |
 | `feature_type` | *unset* | Value of the JSON-FG `featureType` member. |
 | `attachment` | `false` | Whether pygeoapi serves the response as a file download. |
 | `geometry_null` | `true` | Write the GeoJSON `geometry` member as `null` for features that got a `place`. Set to `false` to keep the (arc-approximated, CRS84) geometry alongside `place`. |

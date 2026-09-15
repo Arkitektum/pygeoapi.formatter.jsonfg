@@ -20,7 +20,7 @@ __all__ = [
 DEFAULT_F = "jsonfg"
 
 #: Media type registered for JSON-FG (OGC 21-045).
-DEFAULT_MIMETYPE = "application/vnd.ogc.fg+json"
+DEFAULT_MIMETYPE = "application/geo+json"
 
 #: Suffix used when pygeoapi serves the response as a file attachment.
 EXTENSION = "jsonfg"
