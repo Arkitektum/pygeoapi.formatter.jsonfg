@@ -136,7 +136,7 @@ class JsonFgFormatter(BaseFormatter):
             data_out = self._create_feature_collection_document(
                 head, feature_collection, features_out)
 
-        return to_json(data_out)
+        return to_json(data_out, True)
 
     # ----------------------------------------------------------------- #
     # Features
