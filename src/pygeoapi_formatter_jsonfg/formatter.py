@@ -119,17 +119,24 @@ class JsonFgFormatter(BaseFormatter):
         features_out, has_any_arcs = self._create_features(
             features, coord_trans, crs84_coord_trans)
 
+        is_single_feature = self._is_single_feature(features)
+
+        # The links an item response carries sit on the feature rather than on
+        # the collection pygeoapi wrapped it in, and that is where the
+        # ``collection`` link the schema URL is derived from lives.
+        links_owner = features[0] if is_single_feature else feature_collection
+
         # Members every JSON-FG document carries, whether it is a collection
         # or a single feature. Built first so the key order stays stable.
         head = {
             "conformsTo": self._get_conforms_to(has_any_arcs),
             "featureType": self.feature_type,
-            "featureSchema": self._get_schema_link(data),
+            "featureSchema": self._get_schema_link(links_owner),
             "coordRefSys": content_crs or storage_crs,
             "geometryDimension": GEOMETRY_DIMENSION
         }
 
-        if self._is_single_feature(features):
+        if is_single_feature:
             data_out = self._create_feature_document(
                 head, features[0], features_out[0])
         else:
@@ -349,9 +356,14 @@ class JsonFgFormatter(BaseFormatter):
     # Document members
     # ----------------------------------------------------------------- #
 
-    def _get_schema_link(self, data: Dict[str, Any] | None) -> str | None:
-        """JSON-FG ``featureSchema``, derived from the collection link."""
-        links: List[Dict[str, Any]] = (data or {}).get("links") or []
+    def _get_schema_link(self, links_owner: Dict[str, Any] | None) -> str | None:
+        """JSON-FG ``featureSchema``, derived from the collection link.
+
+        :param links_owner: the object carrying the response's ``links``: the
+                            feature for an item response, the feature
+                            collection otherwise.
+        """
+        links: List[Dict[str, Any]] = (links_owner or {}).get("links") or []
         link = next(
             (link for link in links if link.get("rel") == "collection"), None)
         href = link.get("href") if link else None

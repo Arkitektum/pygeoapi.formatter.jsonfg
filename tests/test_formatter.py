@@ -277,6 +277,17 @@ def test_single_feature_is_inlined(formatter):
     assert out["links"] == ITEM_LINKS
 
 
+def test_single_feature_derives_the_schema_from_the_feature_links(formatter):
+    """An item response has no collection-level links to derive it from."""
+    data = make_feature_collection(
+        [make_feature(GML_POINT, links=ITEM_LINKS)], links=[])
+
+    out = write(formatter, data)
+
+    assert out["featureSchema"] == (
+        "https://example.org/collections/buildings/schema?f=json")
+
+
 def test_single_feature_keeps_navigation_members(formatter):
     data = make_feature_collection([make_feature(
         GML_POINT, feature_id="2", links=ITEM_LINKS, prev="1", next="3")])
