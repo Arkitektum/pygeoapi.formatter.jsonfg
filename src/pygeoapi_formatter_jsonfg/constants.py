@@ -12,7 +12,6 @@ __all__ = [
     "DEFAULT_F",
     "DEFAULT_MIMETYPE",
     "EXTENSION",
-    "GEOMETRY_DIMENSION",
     "GML_PROPERTY",
 ]
 
@@ -34,11 +33,6 @@ CRS84_URI = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
 #: The provider adds it; the formatter consumes and removes it, so it never
 #: reaches the response.
 GML_PROPERTY = "_geometry_gml"
-
-#: Value of the JSON-FG ``geometryDimension`` member. Fixed at 2 (surfaces):
-#: the collections this formatter serves are planar, and JSON-FG allows the
-#: member to be omitted rather than requiring it to be derived per document.
-GEOMETRY_DIMENSION = 2
 
 # Conformance class URIs advertised through the ``conformsTo`` member.
 CONF_CORE = "http://www.opengis.net/spec/json-fg-1/1.0/conf/core"

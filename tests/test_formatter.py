@@ -5,9 +5,9 @@ import json
 import logging
 
 import pytest
-from conftest import (CRS84, EPSG_25833, GEOJSON_POINT, GML_ARC, GML_POINT,
-                      GML_POLYGON, make_feature, make_feature_collection,
-                      make_options)
+from conftest import (CRS84, EPSG_25833, GEOJSON_POINT, GML_ARC, GML_LINE,
+                      GML_POINT, GML_POLYGON, make_feature,
+                      make_feature_collection, make_options)
 
 from pygeoapi_formatter_jsonfg import JsonFgFormatter
 from pygeoapi_formatter_jsonfg.constants import (CONF_CIRCULAR_ARCS, CONF_CORE,
@@ -68,7 +68,7 @@ def test_feature_collection_members(formatter):
     ]
     assert out["type"] == "FeatureCollection"
     assert out["featureType"] == "Building"
-    assert out["geometryDimension"] == 2
+    assert out["geometryDimension"] == 0
     assert out["numberReturned"] == 1
     assert out["numberMatched"] == 1
     assert out["timeStamp"] == data["timeStamp"]
@@ -101,6 +101,36 @@ def test_empty_feature_collection(formatter):
 
     assert out["features"] == []
     assert out["numberReturned"] == 0
+
+
+@pytest.mark.parametrize("gml, dimension", [
+    (GML_POINT, 0), (GML_LINE, 1), (GML_ARC, 1), (GML_POLYGON, 2)])
+def test_geometry_dimension_is_that_of_the_places(formatter, gml, dimension):
+    data = make_feature_collection([
+        make_feature(gml, feature_id="1"), make_feature(gml, feature_id="2")])
+
+    assert write(formatter, data)["geometryDimension"] == dimension
+
+
+def test_geometry_dimension_is_omitted_for_mixed_dimensions(formatter):
+    data = make_feature_collection([
+        make_feature(GML_POINT, feature_id="1"),
+        make_feature(GML_POLYGON, feature_id="2")])
+
+    assert "geometryDimension" not in write(formatter, data)
+
+
+def test_geometry_dimension_is_omitted_without_features(formatter):
+    assert "geometryDimension" not in write(
+        formatter, make_feature_collection([]))
+
+
+def test_geometry_dimension_is_omitted_when_a_feature_has_no_place(formatter):
+    data = make_feature_collection([
+        make_feature(GML_POINT, feature_id="1"),
+        make_feature(None, feature_id="2")])
+
+    assert "geometryDimension" not in write(formatter, data)
 
 
 # --------------------------------------------------------------------------- #

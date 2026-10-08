@@ -18,7 +18,7 @@ from pygeoapi.util import to_json
 
 from . import constants
 from .constants import (CONF_CIRCULAR_ARCS, CONF_CORE, CONF_TYPES_SCHEMAS,
-                        EXTENSION, GEOMETRY_DIMENSION, GML_PROPERTY)
+                        EXTENSION, GML_PROPERTY)
 from .crs import get_coordinate_transformation
 from .geometry import geometry_to_place, has_arcs
 
@@ -116,7 +116,7 @@ class JsonFgFormatter(BaseFormatter):
         crs84_coord_trans = self._get_crs84_coordinate_transformation(
             content_crs)
 
-        features_out, has_any_arcs = self._create_features(
+        features_out, has_any_arcs, dimension = self._create_features(
             features, coord_trans, crs84_coord_trans)
 
         is_single_feature = self._is_single_feature(features)
@@ -132,9 +132,11 @@ class JsonFgFormatter(BaseFormatter):
             "conformsTo": self._get_conforms_to(has_any_arcs),
             "featureType": self.feature_type,
             "featureSchema": self._get_schema_link(links_owner),
-            "coordRefSys": content_crs or storage_crs,
-            "geometryDimension": GEOMETRY_DIMENSION
+            "coordRefSys": content_crs or storage_crs
         }
+
+        if dimension is not None:
+            head["geometryDimension"] = dimension
 
         if is_single_feature:
             data_out = self._create_feature_document(
@@ -154,14 +156,16 @@ class JsonFgFormatter(BaseFormatter):
         features: List[Dict[str, Any]],
         coord_trans: osr.CoordinateTransformation | None,
         crs84_coord_trans: osr.CoordinateTransformation | None
-    ) -> Tuple[List[Dict[str, Any]], bool]:
+    ) -> Tuple[List[Dict[str, Any]], bool, int | None]:
         """Convert every input feature to its JSON-FG counterpart.
 
-        :returns: the converted features, and whether any of them contains a
+        :returns: the converted features; whether any of them contains a
                   circular arc -- which decides the circular-arcs conformance
-                  class for the whole document.
+                  class for the whole document; and the dimension shared by
+                  all their places, for ``geometryDimension``.
         """
         features_out: List[Dict[str, Any]] = []
+        dimensions: List[int | None] = []
         has_any_arcs = False
 
         for feature in features:
@@ -173,10 +177,13 @@ class JsonFgFormatter(BaseFormatter):
 
                 has_any_arcs = has_any_arcs or has_arcs(geom)
 
-            features_out.append(
-                self._create_feature(feature, geom, crs84_coord_trans))
+            feature_out = self._create_feature(
+                feature, geom, crs84_coord_trans)
+            features_out.append(feature_out)
+            dimensions.append(
+                geom.GetDimension() if "place" in feature_out else None)
 
-        return features_out, has_any_arcs
+        return features_out, has_any_arcs, _geometry_dimension(dimensions)
 
     def _get_ogr_geometry(
         self,
@@ -410,3 +417,17 @@ class JsonFgFormatter(BaseFormatter):
 
     def __repr__(self):
         return f'<JsonFgFormatter> {self.name}'
+
+
+def _geometry_dimension(dimensions: List[int | None]) -> int | None:
+    """JSON-FG ``geometryDimension``: the one dimension every place has.
+
+    ``None`` -- the member is then omitted -- when the document has no
+    features, a feature has no ``place``, or the places differ.
+    """
+    distinct = set(dimensions)
+
+    if len(distinct) != 1 or None in distinct:
+        return None
+
+    return distinct.pop()

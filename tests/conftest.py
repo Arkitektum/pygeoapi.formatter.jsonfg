@@ -45,6 +45,13 @@ GML_ARC = (
     '</gml:ArcString></gml:segments></gml:Curve>'
 )
 
+#: A GML 3.2 line string.
+GML_LINE = (
+    f'<gml:LineString {GML_NS}>'
+    '<gml:posList>0 0 10 10</gml:posList>'
+    '</gml:LineString>'
+)
+
 
 def geom(wkt: str) -> ogr.Geometry:
     """Parse *wkt* into an ``ogr.Geometry``, failing the test if it will not."""

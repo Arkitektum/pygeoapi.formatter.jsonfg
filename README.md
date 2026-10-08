@@ -12,6 +12,7 @@ things GeoJSON deliberately leaves out:
 | `place` | A geometry in that CRS, in geometry types GeoJSON cannot express — in particular **circular arcs**. |
 | `featureType` | The name of the feature type, e.g. `Building`. |
 | `featureSchema` | A link to the schema describing the feature properties. |
+| `geometryDimension` | The dimension shared by every place (0 point, 1 curve, 2 surface); omitted when they differ. |
 
 Everything else stays valid GeoJSON, so a client that does not understand
 JSON-FG can still read the document.
@@ -138,7 +139,7 @@ GET /collections/buildings/items?f=jsonfg&crs=http://www.opengis.net/def/crs/OGC
   "featureType": "Building",
   "featureSchema": "https://example.org/collections/buildings/schema?f=json",
   "coordRefSys": "http://www.opengis.net/def/crs/EPSG/0/25833",
-  "geometryDimension": 2,
+  "geometryDimension": 1,
   "features": [
     {
       "type": "Feature",
