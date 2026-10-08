@@ -18,7 +18,7 @@ from pygeoapi.util import to_json
 
 from . import constants
 from .constants import (CONF_CIRCULAR_ARCS, CONF_CORE, CONF_TYPES_SCHEMAS,
-                        EXTENSION, GML_PROPERTY)
+                        DERIVED_POINT_PROPERTY, EXTENSION, GML_PROPERTY)
 from .crs import get_coordinate_transformation
 from .geometry import geometry_to_place, has_arcs
 
@@ -261,14 +261,14 @@ class JsonFgFormatter(BaseFormatter):
         return feature_out
 
     def _get_properties(self, feature: Dict[str, Any]) -> Dict[str, Any]:
-        """The feature properties, without the synthetic GML property.
+        """The feature properties, without the synthetic GML properties.
 
         A copy: the document belongs to pygeoapi, so it is left untouched.
         """
         properties: Dict[str, Any] = feature.get("properties") or {}
 
         return {key: value for key, value in properties.items()
-                if key != GML_PROPERTY}
+                if key not in (GML_PROPERTY, DERIVED_POINT_PROPERTY)}
 
     def _get_feature_geometry(
         self,

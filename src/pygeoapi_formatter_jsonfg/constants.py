@@ -11,6 +11,7 @@ __all__ = [
     "CRS84_URI",
     "DEFAULT_F",
     "DEFAULT_MIMETYPE",
+    "DERIVED_POINT_PROPERTY",
     "EXTENSION",
     "GML_PROPERTY",
 ]
@@ -33,6 +34,10 @@ CRS84_URI = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
 #: The provider adds it; the formatter consumes and removes it, so it never
 #: reaches the response.
 GML_PROPERTY = "_geometry_gml"
+
+#: Synthetic feature property postgresql_ext adds for the GML formatter on
+#: påskrift collections. Never part of the output.
+DERIVED_POINT_PROPERTY = "_derived_point_gml"
 
 # Conformance class URIs advertised through the ``conformsTo`` member.
 CONF_CORE = "http://www.opengis.net/spec/json-fg-1/1.0/conf/core"

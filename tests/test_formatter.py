@@ -179,6 +179,17 @@ def test_gml_property_is_removed(formatter):
         "name": "Feature 1", "height": 12.5}
 
 
+def test_derived_point_property_is_removed(formatter):
+    """postgresql_ext adds it on påskrift collections for the GML formatter."""
+    data = make_feature_collection([make_feature(
+        GML_POINT, properties={"_derived_point_gml": "<gml:Point/>"})])
+
+    properties = write(formatter, data)["features"][0]["properties"]
+
+    assert "_derived_point_gml" not in properties
+    assert "_geometry_gml" not in properties
+
+
 def test_place_is_written_in_the_requested_crs(formatter):
     data = make_feature_collection([make_feature(GML_POINT)])
 
