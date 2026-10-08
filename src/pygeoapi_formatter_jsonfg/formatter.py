@@ -95,6 +95,16 @@ class JsonFgFormatter(BaseFormatter):
 
         :returns: the JSON-FG document as a JSON string.
         """
+        with ogr.ExceptionMgr(useExceptions=True), \
+                osr.ExceptionMgr(useExceptions=True):
+            return self._write(options, data)
+
+    def _write(
+        self,
+        options: Dict[str, Any],
+        data: Dict[str, Any] | None
+    ) -> str:
+        """:meth:`write`, run with GDAL exceptions switched on."""
         feature_collection: Dict[str, Any] = data or {}
         features: List[Dict[str, Any]] = feature_collection.get("features", [])
 
@@ -171,10 +181,17 @@ class JsonFgFormatter(BaseFormatter):
         for feature in features:
             geom = self._get_ogr_geometry(feature)
 
-            if geom is not None:
-                if coord_trans:
+            if geom is not None and coord_trans:
+                try:
                     geom.Transform(coord_trans)
+                except RuntimeError:
+                    LOGGER.warning(
+                        f'Could not transform the geometry of feature '
+                        f'{feature.get("id")}; falling back to its GeoJSON '
+                        'geometry')
+                    geom = None
 
+            if geom is not None:
                 has_any_arcs = has_any_arcs or has_arcs(geom)
 
             feature_out = self._create_feature(
@@ -207,7 +224,10 @@ class JsonFgFormatter(BaseFormatter):
 
             return None
 
-        geom = ogr.CreateGeometryFromGML(gml)
+        try:
+            geom = ogr.CreateGeometryFromGML(gml)
+        except RuntimeError:
+            geom = None
 
         if geom is None:
             LOGGER.warning(
@@ -273,7 +293,10 @@ class JsonFgFormatter(BaseFormatter):
             # No usable GML to project from, so re-read the geometry pygeoapi
             # produced. It is already in the requested CRS, like the GML would
             # have been by this point.
-            ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom))
+            try:
+                ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom))
+            except RuntimeError:
+                ogr_geom = None
 
             if ogr_geom is None:
                 LOGGER.warning(
@@ -282,7 +305,15 @@ class JsonFgFormatter(BaseFormatter):
 
                 return geom
 
-        ogr_geom.Transform(crs84_coord_trans)
+        try:
+            ogr_geom.Transform(crs84_coord_trans)
+        except RuntimeError:
+            LOGGER.warning(
+                'Could not transform the geometry to CRS84; leaving it in the '
+                'requested CRS')
+
+            return geom
+
         json_str = ogr_geom.ExportToJson()
 
         return json.loads(json_str)

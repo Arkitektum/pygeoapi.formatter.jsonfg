@@ -70,8 +70,9 @@ whole response.
 
 * Python 3.12 or newer
 * pygeoapi 0.24 or newer
-* GDAL 3.12 (the `gdal` Python bindings, which must match the GDAL library
-  installed on the system)
+* GDAL 3.7 or newer (the `gdal` Python bindings must match the system
+  library). The formatter neither depends on nor changes the global ogr/osr
+  exception mode. Tested with GDAL 3.11.
 * A feature provider that adds the `_geometry_gml` property. It should also
   declare a `storage_crs`; as in pygeoapi itself, a provider without one is
   taken to store its data in CRS84.
