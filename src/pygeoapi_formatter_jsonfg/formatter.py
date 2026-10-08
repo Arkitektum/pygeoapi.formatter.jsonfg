@@ -20,7 +20,7 @@ from . import constants
 from .constants import (CONF_CIRCULAR_ARCS, CONF_CORE, CONF_TYPES_SCHEMAS,
                         DERIVED_POINT_PROPERTY, EXTENSION, GML_PROPERTY)
 from .crs import get_coordinate_transformation
-from .geometry import geometry_to_place, has_arcs
+from .geometry import JsonFgError, geometry_to_place, has_arcs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -247,7 +247,13 @@ class JsonFgFormatter(BaseFormatter):
             "type": "Feature"
         }
 
-        place = geometry_to_place(geom)
+        try:
+            place = geometry_to_place(geom)
+        except JsonFgError:
+            LOGGER.warning(
+                f'Feature {feature.get("id")} has no JSON-FG encoding; '
+                'falling back to its GeoJSON geometry')
+            place = None
 
         if place:
             feature_out["place"] = place

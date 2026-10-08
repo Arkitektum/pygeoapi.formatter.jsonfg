@@ -10,6 +10,8 @@ from conftest import (CRS84, EPSG_25833, GEOJSON_POINT, GML_ARC, GML_LINE,
                       make_feature_collection, make_options)
 
 from pygeoapi_formatter_jsonfg import JsonFgFormatter
+from pygeoapi_formatter_jsonfg import formatter as formatter_module
+from pygeoapi_formatter_jsonfg.geometry import JsonFgError
 from pygeoapi_formatter_jsonfg.constants import (CONF_CIRCULAR_ARCS, CONF_CORE,
                                                  CONF_TYPES_SCHEMAS)
 
@@ -405,6 +407,36 @@ def test_one_bad_feature_does_not_affect_the_others(formatter):
     assert "place" not in out["features"][0]
     assert out["features"][1]["place"]["type"] == "CircularString"
     assert CONF_CIRCULAR_ARCS in out["conformsTo"]
+
+
+def test_unencodable_geometry_falls_back_to_the_geojson_geometry(
+        formatter, monkeypatch, caplog):
+    real = formatter_module.geometry_to_place
+    calls = []
+
+    def fail_for_the_first(geom):
+        calls.append(geom)
+        if len(calls) == 1:
+            raise JsonFgError("no encoding")
+
+        return real(geom)
+
+    monkeypatch.setattr(
+        formatter_module, "geometry_to_place", fail_for_the_first)
+    data = make_feature_collection([
+        make_feature(GML_POINT, feature_id="bad"),
+        make_feature(GML_POINT, feature_id="good")
+    ])
+
+    with caplog.at_level(logging.WARNING):
+        out = write(formatter, data)
+
+    bad, good = out["features"]
+
+    assert "place" not in bad
+    assert bad["geometry"] == GEOJSON_POINT
+    assert "place" in good
+    assert "bad" in caplog.text
 
 
 def test_feature_without_a_geometry(formatter):
