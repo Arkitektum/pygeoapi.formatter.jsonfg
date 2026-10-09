@@ -285,9 +285,10 @@ class JsonFgFormatter(BaseFormatter):
     ) -> Dict[str, Any] | None:
         """The GeoJSON ``geometry`` member for a feature.
 
-        ``null`` when the geometry is already carried by ``place``, otherwise
-        the geometry pygeoapi produced -- re-projected to CRS84 by way of OGR
-        when the requested CRS is something else.
+        ``null`` when the geometry is already carried by ``place`` or cannot
+        be re-projected to CRS84, otherwise the geometry pygeoapi produced --
+        re-projected to CRS84 by way of OGR when the requested CRS is
+        something else.
         """
         if self.geometry_null and has_place:
             return None
@@ -306,19 +307,19 @@ class JsonFgFormatter(BaseFormatter):
 
             if ogr_geom is None:
                 LOGGER.warning(
-                    'Could not re-read the GeoJSON geometry; leaving it in '
-                    'the requested CRS rather than CRS84')
+                    'Could not re-read the GeoJSON geometry to re-project it '
+                    'to CRS84; writing it as null')
 
-                return geom
+                return None
 
         try:
             ogr_geom.Transform(crs84_coord_trans)
         except RuntimeError:
             LOGGER.warning(
-                'Could not transform the geometry to CRS84; leaving it in the '
-                'requested CRS')
+                'Could not transform the geometry to CRS84; writing it as '
+                'null')
 
-            return geom
+            return None
 
         json_str = ogr_geom.ExportToJson()
 
@@ -441,13 +442,11 @@ class JsonFgFormatter(BaseFormatter):
     ) -> osr.CoordinateTransformation | None:
         """Transformation for the GeoJSON ``geometry`` member, if any.
 
-        ``None`` when the geometry is suppressed anyway, when the client asked
-        for no particular CRS, or when it asked for CRS84 -- in which case
-        pygeoapi already produced the geometry in the right CRS.
+        ``None`` when the client asked for no particular CRS, or when it asked
+        for CRS84 -- in which case pygeoapi already produced the geometry in
+        the right CRS.
         """
-        if (self.geometry_null
-                or content_crs is None
-                or content_crs == self.CRS84_URI):
+        if content_crs is None or content_crs == self.CRS84_URI:
             return None
 
         return get_coordinate_transformation(content_crs, self.CRS84_URI)

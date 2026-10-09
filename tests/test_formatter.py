@@ -548,3 +548,42 @@ def test_kept_geometry_is_reprojected_without_gml_to_project_from():
 
     assert out["features"][0]["geometry"]["coordinates"] == pytest.approx(
         GEOJSON_POINT["coordinates"])
+
+
+def test_geometry_of_a_feature_without_place_is_reprojected_to_crs84(
+        formatter):
+    """geometry_null only suppresses geometries that a place carries."""
+    data = make_feature_collection([make_feature(
+        None,
+        geometry={"type": "Point", "coordinates": [262000.0, 6650000.0]})])
+
+    out = write(formatter, data,
+                storage_crs=EPSG_25833, content_crs=EPSG_25833)
+
+    assert "place" not in out["features"][0]
+    assert out["features"][0]["geometry"]["coordinates"] == pytest.approx(
+        GEOJSON_POINT["coordinates"])
+
+
+def test_geometry_outside_the_projection_domain_is_written_as_null(caplog):
+    """GeoJSON allows only CRS84, so no other CRS may stand in for it."""
+    formatter = JsonFgFormatter({"name": "irrelevant", "geometry_null": False})
+    data = make_feature_collection([make_feature(
+        None, geometry={"type": "Point", "coordinates": [1e30, 1e30]})])
+
+    with caplog.at_level(logging.WARNING):
+        out = write(formatter, data,
+                    storage_crs=EPSG_25833, content_crs=EPSG_25833)
+
+    assert out["features"][0]["geometry"] is None
+    assert "CRS84" in caplog.text
+
+
+def test_unreadable_geometry_in_another_crs_is_written_as_null(formatter):
+    data = make_feature_collection([make_feature(
+        None, geometry={"type": "Point", "coordinates": "x"})])
+
+    out = write(formatter, data,
+                storage_crs=EPSG_25833, content_crs=EPSG_25833)
+
+    assert out["features"][0]["geometry"] is None

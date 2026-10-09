@@ -59,7 +59,9 @@ documents they could have read.
 Steps 3 and 4 are what `geometry_null: true` (the default) does. With
 `geometry_null: false` the GeoJSON `geometry` member is kept as well — useful
 for clients that do not understand JSON-FG — and is reprojected to CRS84, since
-that is the only CRS GeoJSON allows.
+that is the only CRS GeoJSON allows. That holds for every `geometry` the
+formatter writes: one that cannot be reprojected is written as `null` rather
+than in another CRS.
 
 If a feature has no `_geometry_gml` property, or GDAL cannot parse it, that one
 feature is served without a `place` and keeps its GeoJSON geometry, and a
