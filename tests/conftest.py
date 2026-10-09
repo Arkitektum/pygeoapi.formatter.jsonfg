@@ -7,7 +7,7 @@ OGC API - Features response without being taken from any real dataset.
 from typing import Any, Dict, List
 
 import pytest
-from osgeo import ogr
+from osgeo import ogr, osr
 
 #: A metric, projected CRS: ETRS89 / UTM zone 33N, the storage CRS in most of
 #: the tests. Its authority axis order is easting/northing, i.e. x/y.
@@ -43,6 +43,13 @@ GML_ARC = (
     f'<gml:Curve {GML_NS}><gml:segments><gml:ArcString>'
     '<gml:posList>0 0 1 1 2 0</gml:posList>'
     '</gml:ArcString></gml:segments></gml:Curve>'
+)
+
+#: A GML 3.2 line string.
+GML_LINE = (
+    f'<gml:LineString {GML_NS}>'
+    '<gml:posList>0 0 10 10</gml:posList>'
+    '</gml:LineString>'
 )
 
 
@@ -138,3 +145,23 @@ def formatter():
         "name": "pygeoapi_formatter_jsonfg.JsonFgFormatter",
         "feature_type": "Building"
     })
+
+
+@pytest.fixture(autouse=True, params=[False, True],
+                ids=["gdal-exceptions-off", "gdal-exceptions-on"])
+def gdal_exception_mode(request):
+    """Run every test under both global GDAL exception modes.
+
+    pygeoapi loads the formatter into a process whose other plugins set the
+    mode at import; postgresql_ext turns exceptions on.
+    """
+    previous = {module: bool(module.GetUseExceptions())
+                for module in (ogr, osr)}
+
+    for module in (ogr, osr):
+        module.UseExceptions() if request.param else module.DontUseExceptions()
+
+    yield request.param
+
+    for module, used in previous.items():
+        module.UseExceptions() if used else module.DontUseExceptions()

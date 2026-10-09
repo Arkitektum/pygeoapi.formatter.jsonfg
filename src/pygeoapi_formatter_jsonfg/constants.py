@@ -11,8 +11,8 @@ __all__ = [
     "CRS84_URI",
     "DEFAULT_F",
     "DEFAULT_MIMETYPE",
+    "DERIVED_POINT_PROPERTY",
     "EXTENSION",
-    "GEOMETRY_DIMENSION",
     "GML_PROPERTY",
 ]
 
@@ -35,10 +35,9 @@ CRS84_URI = "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
 #: reaches the response.
 GML_PROPERTY = "_geometry_gml"
 
-#: Value of the JSON-FG ``geometryDimension`` member. Fixed at 2 (surfaces):
-#: the collections this formatter serves are planar, and JSON-FG allows the
-#: member to be omitted rather than requiring it to be derived per document.
-GEOMETRY_DIMENSION = 2
+#: Synthetic feature property postgresql_ext adds for the GML formatter on
+#: påskrift collections. Never part of the output.
+DERIVED_POINT_PROPERTY = "_derived_point_gml"
 
 # Conformance class URIs advertised through the ``conformsTo`` member.
 CONF_CORE = "http://www.opengis.net/spec/json-fg-1/1.0/conf/core"

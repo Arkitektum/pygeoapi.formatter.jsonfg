@@ -19,11 +19,6 @@ defined as longitude/latitude, which is the GeoJSON order.
 
 from osgeo import osr
 
-# Keep the GDAL bindings in their historical, non-throwing mode: failures are
-# reported through return codes and the GDAL error handler instead of Python
-# exceptions. The setting is global to ``osgeo.osr``, hence applied at import.
-osr.DontUseExceptions()
-
 __all__ = ["get_coordinate_transformation"]
 
 

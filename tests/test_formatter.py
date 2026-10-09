@@ -5,11 +5,13 @@ import json
 import logging
 
 import pytest
-from conftest import (CRS84, EPSG_25833, GEOJSON_POINT, GML_ARC, GML_POINT,
-                      GML_POLYGON, make_feature, make_feature_collection,
-                      make_options)
+from conftest import (CRS84, EPSG_25833, GEOJSON_POINT, GML_ARC, GML_LINE,
+                      GML_POINT, GML_POLYGON, make_feature,
+                      make_feature_collection, make_options)
 
 from pygeoapi_formatter_jsonfg import JsonFgFormatter
+from pygeoapi_formatter_jsonfg import formatter as formatter_module
+from pygeoapi_formatter_jsonfg.geometry import JsonFgError
 from pygeoapi_formatter_jsonfg.constants import (CONF_CIRCULAR_ARCS, CONF_CORE,
                                                  CONF_TYPES_SCHEMAS)
 
@@ -68,7 +70,7 @@ def test_feature_collection_members(formatter):
     ]
     assert out["type"] == "FeatureCollection"
     assert out["featureType"] == "Building"
-    assert out["geometryDimension"] == 2
+    assert out["geometryDimension"] == 0
     assert out["numberReturned"] == 1
     assert out["numberMatched"] == 1
     assert out["timeStamp"] == data["timeStamp"]
@@ -101,6 +103,36 @@ def test_empty_feature_collection(formatter):
 
     assert out["features"] == []
     assert out["numberReturned"] == 0
+
+
+@pytest.mark.parametrize("gml, dimension", [
+    (GML_POINT, 0), (GML_LINE, 1), (GML_ARC, 1), (GML_POLYGON, 2)])
+def test_geometry_dimension_is_that_of_the_places(formatter, gml, dimension):
+    data = make_feature_collection([
+        make_feature(gml, feature_id="1"), make_feature(gml, feature_id="2")])
+
+    assert write(formatter, data)["geometryDimension"] == dimension
+
+
+def test_geometry_dimension_is_omitted_for_mixed_dimensions(formatter):
+    data = make_feature_collection([
+        make_feature(GML_POINT, feature_id="1"),
+        make_feature(GML_POLYGON, feature_id="2")])
+
+    assert "geometryDimension" not in write(formatter, data)
+
+
+def test_geometry_dimension_is_omitted_without_features(formatter):
+    assert "geometryDimension" not in write(
+        formatter, make_feature_collection([]))
+
+
+def test_geometry_dimension_is_omitted_when_a_feature_has_no_place(formatter):
+    data = make_feature_collection([
+        make_feature(GML_POINT, feature_id="1"),
+        make_feature(None, feature_id="2")])
+
+    assert "geometryDimension" not in write(formatter, data)
 
 
 # --------------------------------------------------------------------------- #
@@ -147,6 +179,17 @@ def test_gml_property_is_removed(formatter):
     assert "_geometry_gml" not in out["features"][0]["properties"]
     assert out["features"][0]["properties"] == {
         "name": "Feature 1", "height": 12.5}
+
+
+def test_derived_point_property_is_removed(formatter):
+    """postgresql_ext adds it on påskrift collections for the GML formatter."""
+    data = make_feature_collection([make_feature(
+        GML_POINT, properties={"_derived_point_gml": "<gml:Point/>"})])
+
+    properties = write(formatter, data)["features"][0]["properties"]
+
+    assert "_derived_point_gml" not in properties
+    assert "_geometry_gml" not in properties
 
 
 def test_place_is_written_in_the_requested_crs(formatter):
@@ -366,6 +409,36 @@ def test_one_bad_feature_does_not_affect_the_others(formatter):
     assert CONF_CIRCULAR_ARCS in out["conformsTo"]
 
 
+def test_unencodable_geometry_falls_back_to_the_geojson_geometry(
+        formatter, monkeypatch, caplog):
+    real = formatter_module.geometry_to_place
+    calls = []
+
+    def fail_for_the_first(geom):
+        calls.append(geom)
+        if len(calls) == 1:
+            raise JsonFgError("no encoding")
+
+        return real(geom)
+
+    monkeypatch.setattr(
+        formatter_module, "geometry_to_place", fail_for_the_first)
+    data = make_feature_collection([
+        make_feature(GML_POINT, feature_id="bad"),
+        make_feature(GML_POINT, feature_id="good")
+    ])
+
+    with caplog.at_level(logging.WARNING):
+        out = write(formatter, data)
+
+    bad, good = out["features"]
+
+    assert "place" not in bad
+    assert bad["geometry"] == GEOJSON_POINT
+    assert "place" in good
+    assert "bad" in caplog.text
+
+
 def test_feature_without_a_geometry(formatter):
     """A GeoJSON feature may legitimately have a null geometry."""
     data = make_feature_collection([make_feature(None, geometry=None)])
@@ -475,3 +548,42 @@ def test_kept_geometry_is_reprojected_without_gml_to_project_from():
 
     assert out["features"][0]["geometry"]["coordinates"] == pytest.approx(
         GEOJSON_POINT["coordinates"])
+
+
+def test_geometry_of_a_feature_without_place_is_reprojected_to_crs84(
+        formatter):
+    """geometry_null only suppresses geometries that a place carries."""
+    data = make_feature_collection([make_feature(
+        None,
+        geometry={"type": "Point", "coordinates": [262000.0, 6650000.0]})])
+
+    out = write(formatter, data,
+                storage_crs=EPSG_25833, content_crs=EPSG_25833)
+
+    assert "place" not in out["features"][0]
+    assert out["features"][0]["geometry"]["coordinates"] == pytest.approx(
+        GEOJSON_POINT["coordinates"])
+
+
+def test_geometry_outside_the_projection_domain_is_written_as_null(caplog):
+    """GeoJSON allows only CRS84, so no other CRS may stand in for it."""
+    formatter = JsonFgFormatter({"name": "irrelevant", "geometry_null": False})
+    data = make_feature_collection([make_feature(
+        None, geometry={"type": "Point", "coordinates": [1e30, 1e30]})])
+
+    with caplog.at_level(logging.WARNING):
+        out = write(formatter, data,
+                    storage_crs=EPSG_25833, content_crs=EPSG_25833)
+
+    assert out["features"][0]["geometry"] is None
+    assert "CRS84" in caplog.text
+
+
+def test_unreadable_geometry_in_another_crs_is_written_as_null(formatter):
+    data = make_feature_collection([make_feature(
+        None, geometry={"type": "Point", "coordinates": "x"})])
+
+    out = write(formatter, data,
+                storage_crs=EPSG_25833, content_crs=EPSG_25833)
+
+    assert out["features"][0]["geometry"] is None

@@ -18,9 +18,9 @@ from pygeoapi.util import to_json
 
 from . import constants
 from .constants import (CONF_CIRCULAR_ARCS, CONF_CORE, CONF_TYPES_SCHEMAS,
-                        EXTENSION, GEOMETRY_DIMENSION, GML_PROPERTY)
+                        DERIVED_POINT_PROPERTY, EXTENSION, GML_PROPERTY)
 from .crs import get_coordinate_transformation
-from .geometry import geometry_to_place, has_arcs
+from .geometry import JsonFgError, geometry_to_place, has_arcs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -95,6 +95,16 @@ class JsonFgFormatter(BaseFormatter):
 
         :returns: the JSON-FG document as a JSON string.
         """
+        with ogr.ExceptionMgr(useExceptions=True), \
+                osr.ExceptionMgr(useExceptions=True):
+            return self._write(options, data)
+
+    def _write(
+        self,
+        options: Dict[str, Any],
+        data: Dict[str, Any] | None
+    ) -> str:
+        """:meth:`write`, run with GDAL exceptions switched on."""
         feature_collection: Dict[str, Any] = data or {}
         features: List[Dict[str, Any]] = feature_collection.get("features", [])
 
@@ -116,7 +126,7 @@ class JsonFgFormatter(BaseFormatter):
         crs84_coord_trans = self._get_crs84_coordinate_transformation(
             content_crs)
 
-        features_out, has_any_arcs = self._create_features(
+        features_out, has_any_arcs, dimension = self._create_features(
             features, coord_trans, crs84_coord_trans)
 
         is_single_feature = self._is_single_feature(features)
@@ -132,9 +142,11 @@ class JsonFgFormatter(BaseFormatter):
             "conformsTo": self._get_conforms_to(has_any_arcs),
             "featureType": self.feature_type,
             "featureSchema": self._get_schema_link(links_owner),
-            "coordRefSys": content_crs or storage_crs,
-            "geometryDimension": GEOMETRY_DIMENSION
+            "coordRefSys": content_crs or storage_crs
         }
+
+        if dimension is not None:
+            head["geometryDimension"] = dimension
 
         if is_single_feature:
             data_out = self._create_feature_document(
@@ -154,29 +166,41 @@ class JsonFgFormatter(BaseFormatter):
         features: List[Dict[str, Any]],
         coord_trans: osr.CoordinateTransformation | None,
         crs84_coord_trans: osr.CoordinateTransformation | None
-    ) -> Tuple[List[Dict[str, Any]], bool]:
+    ) -> Tuple[List[Dict[str, Any]], bool, int | None]:
         """Convert every input feature to its JSON-FG counterpart.
 
-        :returns: the converted features, and whether any of them contains a
+        :returns: the converted features; whether any of them contains a
                   circular arc -- which decides the circular-arcs conformance
-                  class for the whole document.
+                  class for the whole document; and the dimension shared by
+                  all their places, for ``geometryDimension``.
         """
         features_out: List[Dict[str, Any]] = []
+        dimensions: List[int | None] = []
         has_any_arcs = False
 
         for feature in features:
             geom = self._get_ogr_geometry(feature)
 
-            if geom is not None:
-                if coord_trans:
+            if geom is not None and coord_trans:
+                try:
                     geom.Transform(coord_trans)
+                except RuntimeError:
+                    LOGGER.warning(
+                        f'Could not transform the geometry of feature '
+                        f'{feature.get("id")}; falling back to its GeoJSON '
+                        'geometry')
+                    geom = None
 
+            if geom is not None:
                 has_any_arcs = has_any_arcs or has_arcs(geom)
 
-            features_out.append(
-                self._create_feature(feature, geom, crs84_coord_trans))
+            feature_out = self._create_feature(
+                feature, geom, crs84_coord_trans)
+            features_out.append(feature_out)
+            dimensions.append(
+                geom.GetDimension() if "place" in feature_out else None)
 
-        return features_out, has_any_arcs
+        return features_out, has_any_arcs, _geometry_dimension(dimensions)
 
     def _get_ogr_geometry(
         self,
@@ -200,7 +224,10 @@ class JsonFgFormatter(BaseFormatter):
 
             return None
 
-        geom = ogr.CreateGeometryFromGML(gml)
+        try:
+            geom = ogr.CreateGeometryFromGML(gml)
+        except RuntimeError:
+            geom = None
 
         if geom is None:
             LOGGER.warning(
@@ -220,7 +247,13 @@ class JsonFgFormatter(BaseFormatter):
             "type": "Feature"
         }
 
-        place = geometry_to_place(geom)
+        try:
+            place = geometry_to_place(geom)
+        except JsonFgError:
+            LOGGER.warning(
+                f'Feature {feature.get("id")} has no JSON-FG encoding; '
+                'falling back to its GeoJSON geometry')
+            place = None
 
         if place:
             feature_out["place"] = place
@@ -234,14 +267,14 @@ class JsonFgFormatter(BaseFormatter):
         return feature_out
 
     def _get_properties(self, feature: Dict[str, Any]) -> Dict[str, Any]:
-        """The feature properties, without the synthetic GML property.
+        """The feature properties, without the synthetic GML properties.
 
         A copy: the document belongs to pygeoapi, so it is left untouched.
         """
         properties: Dict[str, Any] = feature.get("properties") or {}
 
         return {key: value for key, value in properties.items()
-                if key != GML_PROPERTY}
+                if key not in (GML_PROPERTY, DERIVED_POINT_PROPERTY)}
 
     def _get_feature_geometry(
         self,
@@ -252,9 +285,10 @@ class JsonFgFormatter(BaseFormatter):
     ) -> Dict[str, Any] | None:
         """The GeoJSON ``geometry`` member for a feature.
 
-        ``null`` when the geometry is already carried by ``place``, otherwise
-        the geometry pygeoapi produced -- re-projected to CRS84 by way of OGR
-        when the requested CRS is something else.
+        ``null`` when the geometry is already carried by ``place`` or cannot
+        be re-projected to CRS84, otherwise the geometry pygeoapi produced --
+        re-projected to CRS84 by way of OGR when the requested CRS is
+        something else.
         """
         if self.geometry_null and has_place:
             return None
@@ -266,16 +300,27 @@ class JsonFgFormatter(BaseFormatter):
             # No usable GML to project from, so re-read the geometry pygeoapi
             # produced. It is already in the requested CRS, like the GML would
             # have been by this point.
-            ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom))
+            try:
+                ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom))
+            except RuntimeError:
+                ogr_geom = None
 
             if ogr_geom is None:
                 LOGGER.warning(
-                    'Could not re-read the GeoJSON geometry; leaving it in '
-                    'the requested CRS rather than CRS84')
+                    'Could not re-read the GeoJSON geometry to re-project it '
+                    'to CRS84; writing it as null')
 
-                return geom
+                return None
 
-        ogr_geom.Transform(crs84_coord_trans)
+        try:
+            ogr_geom.Transform(crs84_coord_trans)
+        except RuntimeError:
+            LOGGER.warning(
+                'Could not transform the geometry to CRS84; writing it as '
+                'null')
+
+            return None
+
         json_str = ogr_geom.ExportToJson()
 
         return json.loads(json_str)
@@ -397,16 +442,28 @@ class JsonFgFormatter(BaseFormatter):
     ) -> osr.CoordinateTransformation | None:
         """Transformation for the GeoJSON ``geometry`` member, if any.
 
-        ``None`` when the geometry is suppressed anyway, when the client asked
-        for no particular CRS, or when it asked for CRS84 -- in which case
-        pygeoapi already produced the geometry in the right CRS.
+        ``None`` when the client asked for no particular CRS, or when it asked
+        for CRS84 -- in which case pygeoapi already produced the geometry in
+        the right CRS.
         """
-        if (self.geometry_null
-                or content_crs is None
-                or content_crs == self.CRS84_URI):
+        if content_crs is None or content_crs == self.CRS84_URI:
             return None
 
         return get_coordinate_transformation(content_crs, self.CRS84_URI)
 
     def __repr__(self):
         return f'<JsonFgFormatter> {self.name}'
+
+
+def _geometry_dimension(dimensions: List[int | None]) -> int | None:
+    """JSON-FG ``geometryDimension``: the one dimension every place has.
+
+    ``None`` -- the member is then omitted -- when the document has no
+    features, a feature has no ``place``, or the places differ.
+    """
+    distinct = set(dimensions)
+
+    if len(distinct) != 1 or None in distinct:
+        return None
+
+    return distinct.pop()
