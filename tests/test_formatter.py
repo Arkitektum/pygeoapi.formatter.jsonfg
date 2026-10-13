@@ -587,3 +587,19 @@ def test_unreadable_geometry_in_another_crs_is_written_as_null(formatter):
                 storage_crs=EPSG_25833, content_crs=EPSG_25833)
 
     assert out["features"][0]["geometry"] is None
+
+
+# --------------------------------------------------------------------------- #
+# profiles
+# --------------------------------------------------------------------------- #
+
+
+def test_profiles_without_a_kept_geometry():
+    """jsonfg-plus requires a geometry wherever place is set (OGC 21-045)."""
+    assert JsonFgFormatter({"name": "irrelevant"}).profiles == ["jsonfg"]
+
+
+def test_profiles_with_a_kept_geometry():
+    formatter = JsonFgFormatter({"name": "irrelevant", "geometry_null": False})
+
+    assert formatter.profiles == ["jsonfg-plus", "jsonfg"]

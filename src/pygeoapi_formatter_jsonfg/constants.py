@@ -14,6 +14,8 @@ __all__ = [
     "DERIVED_POINT_PROPERTY",
     "EXTENSION",
     "GML_PROPERTY",
+    "PROFILE_JSONFG",
+    "PROFILE_JSONFG_PLUS",
 ]
 
 #: Value of the ``f=`` query parameter this formatter answers to.
@@ -43,3 +45,8 @@ DERIVED_POINT_PROPERTY = "_derived_point_gml"
 CONF_CORE = "http://www.opengis.net/spec/json-fg-1/1.0/conf/core"
 CONF_TYPES_SCHEMAS = "http://www.opengis.net/spec/json-fg-1/1.0/conf/types-schemas"  # noqa: E501
 CONF_CIRCULAR_ARCS = "http://www.opengis.net/spec/json-fg-1/1.0/conf/circular-arcs"  # noqa: E501
+
+# GeoJSON profile ids (OGC 21-045 clause 14), the {id} in
+# http://www.opengis.net/def/profile/OGC/0/{id} and the profile= query value.
+PROFILE_JSONFG = "jsonfg"
+PROFILE_JSONFG_PLUS = "jsonfg-plus"

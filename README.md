@@ -129,6 +129,45 @@ GET /collections/buildings/items?f=jsonfg
 GET /collections/buildings/items?f=jsonfg&crs=http://www.opengis.net/def/crs/OGC/1.3/CRS84
 ```
 
+## GeoJSON profiles
+
+JSON-FG shares the `application/geo+json` media type with plain GeoJSON. The
+two are told apart by
+[GeoJSON profiles](https://docs.ogc.org/is/21-045r1/21-045r1.html#rc_profiles):
+`rfc7946` (plain GeoJSON), `jsonfg`, and `jsonfg-plus` (JSON-FG that also
+keeps a WGS 84 `geometry` next to every `place`, for GeoJSON-only readers).
+
+The formatter declares the profiles its output satisfies in its `profiles`
+attribute. The value follows from `geometry_null` and cannot be configured
+separately:
+
+| `geometry_null` | `profiles` |
+| --- | --- |
+| `true` | `["jsonfg"]` |
+| `false` | `["jsonfg-plus", "jsonfg"]` |
+
+One gap remains: even with `geometry_null: false`, a feature that reaches the
+formatter without a GeoJSON geometry, or whose geometry cannot be re-projected
+to CRS84, is written with `geometry: null`, which `jsonfg-plus` does not allow.
+
+The first entry is the profile served when a client asks for the format with
+`f=` and names no profile.
+
+A server that implements the `profile` query parameter (OGC 21-045 clause 15),
+such as [pygeoapi.dibk](https://github.com/Arkitektum/pygeoapi.dibk), reads
+this attribute to pick the formatter for `profile=jsonfg` or
+`profile=jsonfg-plus`. To offer both, configure the formatter twice. The `f`
+values must differ, because pygeoapi keys formatters by them:
+
+```yaml
+formatters:
+  - name: pygeoapi_formatter_jsonfg.JsonFgFormatter
+    f: jsonfg
+  - name: pygeoapi_formatter_jsonfg.JsonFgFormatter
+    f: jsonfg-plus
+    geometry_null: false
+```
+
 ## Example output
 
 ```json

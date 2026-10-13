@@ -18,7 +18,8 @@ from pygeoapi.util import to_json
 
 from . import constants
 from .constants import (CONF_CIRCULAR_ARCS, CONF_CORE, CONF_TYPES_SCHEMAS,
-                        DERIVED_POINT_PROPERTY, EXTENSION, GML_PROPERTY)
+                        DERIVED_POINT_PROPERTY, EXTENSION, GML_PROPERTY,
+                        PROFILE_JSONFG, PROFILE_JSONFG_PLUS)
 from .crs import get_coordinate_transformation
 from .geometry import JsonFgError, geometry_to_place, has_arcs
 
@@ -79,6 +80,11 @@ class JsonFgFormatter(BaseFormatter):
         #: Set ``geometry_null: false`` to keep the GeoJSON geometry as well,
         #: for clients that do not understand JSON-FG.
         self.geometry_null = bool(formatter_def.get("geometry_null", True))
+
+        #: GeoJSON profiles the output satisfies; pygeoapi.dibk reads this
+        #: for the profile query parameter, the first is the default.
+        self.profiles = ([PROFILE_JSONFG] if self.geometry_null
+                         else [PROFILE_JSONFG_PLUS, PROFILE_JSONFG])
 
     def write(
         self,
