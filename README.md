@@ -146,9 +146,11 @@ separately:
 | `true` | `["jsonfg"]` |
 | `false` | `["jsonfg-plus", "jsonfg"]` |
 
-One gap remains: even with `geometry_null: false`, a feature that reaches the
-formatter without a GeoJSON geometry, or whose geometry cannot be re-projected
-to CRS84, is written with `geometry: null`, which `jsonfg-plus` does not allow.
+A feature never has a `place` without a `geometry` that `jsonfg-plus` would
+reject. With `geometry_null: false`, a feature whose geometry cannot be
+re-projected to CRS84 is written with neither, and a warning is logged. Under
+`skipGeometry=true` pygeoapi leaves the geometry out, so no feature gets a
+`place` either, whatever `geometry_null` says.
 
 The first entry is the profile served when a client asks for the format with
 `f=` and names no profile.

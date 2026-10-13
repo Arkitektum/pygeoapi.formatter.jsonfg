@@ -6,7 +6,7 @@ import logging
 
 import pytest
 from conftest import (CRS84, EPSG_25833, GEOJSON_POINT, GML_ARC, GML_LINE,
-                      GML_POINT, GML_POLYGON, make_feature,
+                      GML_NS, GML_POINT, GML_POLYGON, make_feature,
                       make_feature_collection, make_options)
 
 from pygeoapi_formatter_jsonfg import JsonFgFormatter
@@ -14,6 +14,9 @@ from pygeoapi_formatter_jsonfg import formatter as formatter_module
 from pygeoapi_formatter_jsonfg.geometry import JsonFgError
 from pygeoapi_formatter_jsonfg.constants import (CONF_CIRCULAR_ARCS, CONF_CORE,
                                                  CONF_TYPES_SCHEMAS)
+
+GML_OUTSIDE_THE_PROJECTION_DOMAIN = (
+    f'<gml:Point {GML_NS}><gml:pos>1e30 1e30</gml:pos></gml:Point>')
 
 
 def write(formatter, data, **options_kwargs):
@@ -449,6 +452,34 @@ def test_feature_without_a_geometry(formatter):
     assert "place" not in out["features"][0]
 
 
+@pytest.mark.parametrize("geometry_null", [True, False])
+def test_skipped_geometry_writes_no_place(geometry_null):
+    """postgresql_ext still sends the GML property under skipGeometry=true."""
+    formatter = JsonFgFormatter(
+        {"name": "irrelevant", "geometry_null": geometry_null})
+    data = make_feature_collection([make_feature(GML_ARC, geometry=None)])
+
+    out = write(formatter, data)
+    feature = out["features"][0]
+
+    assert "place" not in feature
+    assert feature["geometry"] is None
+    assert CONF_CIRCULAR_ARCS not in out["conformsTo"]
+
+
+def test_arcs_without_a_place_are_not_declared(formatter, monkeypatch):
+    def no_encoding(geom):
+        raise JsonFgError("no encoding")
+
+    monkeypatch.setattr(formatter_module, "geometry_to_place", no_encoding)
+    data = make_feature_collection([make_feature(GML_ARC)])
+
+    out = write(formatter, data)
+
+    assert "place" not in out["features"][0]
+    assert CONF_CIRCULAR_ARCS not in out["conformsTo"]
+
+
 def test_the_input_document_is_not_modified(formatter):
     """The document belongs to pygeoapi; the formatter only reads it."""
     feature = make_feature(GML_POINT)
@@ -603,3 +634,20 @@ def test_profiles_with_a_kept_geometry():
     formatter = JsonFgFormatter({"name": "irrelevant", "geometry_null": False})
 
     assert formatter.profiles == ["jsonfg-plus", "jsonfg"]
+
+
+def test_kept_geometry_never_leaves_a_place_without_one(caplog):
+    """jsonfg-plus requires a non-null geometry wherever place is set."""
+    formatter = JsonFgFormatter({"name": "irrelevant", "geometry_null": False})
+    data = make_feature_collection([make_feature(
+        GML_OUTSIDE_THE_PROJECTION_DOMAIN, feature_id="far-away",
+        geometry={"type": "Point", "coordinates": [1e30, 1e30]})])
+
+    with caplog.at_level(logging.WARNING):
+        out = write(formatter, data,
+                    storage_crs=EPSG_25833, content_crs=EPSG_25833)
+    feature = out["features"][0]
+
+    assert "place" not in feature
+    assert feature["geometry"] is None
+    assert "far-away" in caplog.text

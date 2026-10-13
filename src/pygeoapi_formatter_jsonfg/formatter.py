@@ -185,7 +185,10 @@ class JsonFgFormatter(BaseFormatter):
         has_any_arcs = False
 
         for feature in features:
-            geom = self._get_ogr_geometry(feature)
+            # pygeoapi's skipGeometry nulls the geometry; postgresql_ext still
+            # sends the GML property.
+            geom = (self._get_ogr_geometry(feature)
+                    if feature.get("geometry") is not None else None)
 
             if geom is not None and coord_trans:
                 try:
@@ -197,14 +200,12 @@ class JsonFgFormatter(BaseFormatter):
                         'geometry')
                     geom = None
 
-            if geom is not None:
-                has_any_arcs = has_any_arcs or has_arcs(geom)
-
             feature_out = self._create_feature(
                 feature, geom, crs84_coord_trans)
             features_out.append(feature_out)
-            dimensions.append(
-                geom.GetDimension() if "place" in feature_out else None)
+            has_place = "place" in feature_out
+            has_any_arcs = has_any_arcs or (has_place and has_arcs(geom))
+            dimensions.append(geom.GetDimension() if has_place else None)
 
         return features_out, has_any_arcs, _geometry_dimension(dimensions)
 
@@ -261,12 +262,21 @@ class JsonFgFormatter(BaseFormatter):
                 'falling back to its GeoJSON geometry')
             place = None
 
+        geometry = self._get_feature_geometry(
+            geom, feature.get("geometry"), place is not None,
+            crs84_coord_trans)
+
+        # OGC 21-045 Req 32 B: jsonfg-plus needs a geometry wherever place is.
+        if place and geometry is None and not self.geometry_null:
+            LOGGER.warning(
+                f'Feature {feature.get("id")} has no CRS84 geometry to keep '
+                'next to its place; writing it without either')
+            place = None
+
         if place:
             feature_out["place"] = place
 
-        feature_out["geometry"] = self._get_feature_geometry(
-            geom, feature.get("geometry"), place is not None,
-            crs84_coord_trans)
+        feature_out["geometry"] = geometry
         feature_out["id"] = feature.get("id")
         feature_out["properties"] = self._get_properties(feature)
 
